@@ -1,0 +1,14 @@
+{
+    "require": {
+        "php": ">= 7.4",
+        "google/cloud-functions-framework": "^1.1",
+        "illuminate/collections": "^9.45",
+        "guzzlehttp/guzzle": "^7.5"
+    },
+    "scripts": {
+        "start": [
+           "Composer\\Config::disableProcessTimeout",
+           "FUNCTION_TARGET=maverickChunker php -S localhost:${PORT:-8080} vendor/google/cloud-functions-framework/router.php"
+        ]
+    }
+}
