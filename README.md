@@ -29,6 +29,27 @@ composer start
 
 Open `http://localhost:8080/` in your browser
 
+
+## Run your function in a container
+
+After completing the steps under **Installation**, build the container using the example `Dockerfile`:
+
+```
+docker build . \
+    -f Dockerfile \
+    -t maverick-chunker
+```
+
+Run the cloud functions framework container:
+
+```
+docker run -p 8080:8080 \
+    -e FUNCTION_TARGET=maverickChunker \
+    maverick-chunker
+```
+
+Open `http://localhost:8080/` in your browser
+
 ## Making request
 
 This function use POST method to read data and process it before return in json format.

@@ -14,26 +14,31 @@ FunctionsFramework::http('maverickChunker', 'maverickChunker');
 
 function maverickChunker(ServerRequestInterface $request): ResponseInterface
 {
+    $msg = "Bad Request";
+
     if ($request->getMethod() == "POST") {
         $data = $request->getParsedBody();
-        
-        $chunker = new maverickChunkerClass($data);
+        $msg = "Missing parameter content";
+    
+        if(isset($data['content'])){
+            $chunker = new maverickChunkerClass($data);
 
-        return new Response(
-            200,
-            ['content-type' => 'application/json'],
-            json_encode([
-                "msg" => "success",
-                "data" => $chunker->parseNews($data)
-            ])
-        );
+            return new Response(
+                200,
+                ['content-type' => 'application/json'],
+                json_encode([
+                    "msg" => "Success",
+                    "data" => $chunker->parseNews($data)
+                ])
+            );
+        }
     }
     
     return new Response(
         400,
         ['content-type' => 'application/json'],
         json_encode([
-            "msg" => "Bad Request"
+            "msg" => $msg
         ])
     );
 }
@@ -47,7 +52,7 @@ class maverickChunkerClass
     private $fs_opt;
     private $allowedEl;
     private $max_char = 900;
-    private $additional_char_per_paragraf = 30; 
+    private $additional_char_per_paragraf = 0; 
     
     function __construct($rawContent)
     {
@@ -78,7 +83,7 @@ class maverickChunkerClass
         $news = collect();
 
         $news = $news->merge($this->parseDom($this->replace_fig_with_p($row['content'])));
-
+        //print_r($news);
         $news = $this->transformElement($news);
 
         return $news;
@@ -134,7 +139,7 @@ class maverickChunkerClass
                 ],*/
             ];
 
-            //check current text if it is part of image caption
+            //check current text if it is part of image caption (works on trstdly)
             if(
                 $return['type']=='text' && 
                 count($return['attributes']) > 0 && 
