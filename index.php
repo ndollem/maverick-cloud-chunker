@@ -52,16 +52,16 @@ class maverickChunkerClass
     private $fs_opt;
     private $allowedEl;
     private $max_char = 900;
-    private $additional_char_per_paragraf = 0; 
+    private $additional_char_per_paragraf = 30; 
     
-    function __construct($rawContent)
+    function __construct()
     {
         //$this->content = ($rawContent) ? $rawContent : false;
 
         $this->bg_color_order = -1;
 
         //allowed main element to be checked on chunk process
-        $this->allowedEl = ['p', 'ol', 'ul', 'img', 'figure'];
+        $this->allowedEl = ['p', 'ol', 'ul', 'img', 'figure', 'h2'];
         
         //adjust this according to each site provided UI Style
         $this->bg_color_opt = [
@@ -124,7 +124,7 @@ class maverickChunkerClass
         $elm->transform(function($item, $key) {
             //print_r($item);
             
-            $type = $this->get_type_basedOnNodes($item->childNodes);
+            $type = $this->get_type_basedOnNodes($item);
 
             $return = [
                 'type' => $type,
@@ -133,10 +133,6 @@ class maverickChunkerClass
                 'content' => ($type=='img') ? null : strip_tags($this->elmToHtml($item)),
                 'rawContent' => $this->elmToHtml($item),
                 'attributes' => $this->get_attributes($item),
-                /*'santences' => [
-                    'count' => count($this->getSentences(strip_tags($this->elmToHtml($item)))),
-                    'items' => $this->getSentences(strip_tags($this->elmToHtml($item)))
-                ],*/
             ];
 
             //check current text if it is part of image caption (works on trstdly)
@@ -167,7 +163,7 @@ class maverickChunkerClass
         $skip_next = 0;
         $curr_char = 0;
         $next_index = 0;
-        //print_r(array_values($rows));
+        //print_r($rows); exit;
         $rows = array_values($rows);
         
         foreach($rows as $index=>$row)
@@ -181,12 +177,34 @@ class maverickChunkerClass
 
             $templ_conf = [];
             //setup background color theme order
-            $this->bg_color_order = ($this->bg_color_order >= 3) ? 0 : ($this->bg_color_order+1);
+            $this->bg_color_order = 0; //($this->bg_color_order >= 3) ? 0 : ($this->bg_color_order+1);
             $templ_conf['bg_theme'] = $this->bg_color_opt[$this->bg_color_order];
             
             switch ($row['type']) {
-                case 'img':
+                case 'title':
+                    //CASE : -- if the current type is title
+                    if(isset($rows[$index+1]) && $rows[$index+1]['type']=='img'){
+                        //combine next row data of image into this row
+                        $row['rawContent'] .= $rows[$index+1]['rawContent'];
+                        $row['type'] = 'title-img';
+                        $row['attributes'] = $rows[$index+1]['attributes'];
+                        //skip for next itteration
+                        $skip_next++;
 
+                        //CASE : -- if the next row after image is a caption
+                        if(isset($rows[$index+2]) && $rows[$index+2]['type']=='img-caption'){
+                            //combine next row data of image caption into this row
+                            $row['attributes']['caption'] = $rows[$index+2];
+                            //skip for next itteration
+                            $skip_next++;
+                        }
+                    }else{
+                        extract($this->populate_text_content($rows, $index));
+                        $row['type'] = 'text';
+                    }
+                    break;
+
+                case 'img':
                     //CASE : -- if next row is part of image caption
                     if(isset($rows[$index+1]) && $rows[$index+1]['type']=='img-caption'){
                         //combine next row data of image caption into this row
@@ -194,40 +212,15 @@ class maverickChunkerClass
                         //skip for next itteration
                         $skip_next++;
                     }
-
                     break;
-                case 'text':
 
-                    //CASE : -- if current text still not reaching max total char per screen
-                    if($row['chars'] < $this->max_char)
-                    {
-                        $curr_char = $row['chars'];
-                        $next_index = $skip_next = 0;
-                        while($curr_char < $this->max_char)
-                        {
-                            $next_index = $index+$skip_next+1;
-                            if(
-                                isset($rows[$next_index]) && 
-                                $rows[$next_index]['type']=='text' &&
-                                ($curr_char + $rows[$next_index]['chars']) < $this->max_char
-                            ){
-                                //combine with next row data (as long it also text)                                
-                                $row['content'] .= ' '.$rows[$next_index]['content'];
-                                $row['rawContent'] .= $rows[$next_index]['rawContent'];
-                                $row['chars'] = $curr_char = strlen($row['content']);
-                                $row['words'] = str_word_count(strip_tags($row['content']));
-                                $skip_next++;
-                                $curr_char += ($this->additional_char_per_paragraf*$skip_next);
-                                //$row['curr_char'] = $curr_char;
-                                //$row['skip_next'] = $skip_next;
-                            }else{
-                                //reset counter
-                                $curr_char = $this->max_char+1;
-                            }
-                        }
-                    }
-                    break;
+                //case 'text' || 'title' || 'list':
                 default:
+                    //CASE : -- if current text still not reaching max total char per screen
+                    extract($this->populate_text_content($rows, $index));
+                    break;
+
+                
             }
 
             //CASE : -- setup font size based on the length of text
@@ -240,7 +233,61 @@ class maverickChunkerClass
         return $data;
     }
 
-    private function get_fontSize($charLength = 0)
+    private function populate_text_content($rows, $index)
+    {
+        $row = $rows[$index];
+
+        if($row['chars'] < $this->max_char)
+        {
+            //reset all looping variables
+            $curr_char = $row['chars'];
+            $next_index = $skip_next = 0;
+
+            //loop while current char still not exceeding the max char limit
+            while($curr_char < $this->max_char)
+            {
+                //plus 1 for skipping next $row loop
+                $next_index = $index+$skip_next+1;
+
+                //check if the next index is exist and 
+                //if we add next index it will not exceeding max char limit
+                if(
+                    isset($rows[$next_index]) && 
+                    ($rows[$next_index]['type']=='text' || $rows[$next_index]['type']=='title' || $rows[$next_index]['type']=='list') &&
+                    ($curr_char + $rows[$next_index]['chars']) < $this->max_char
+                ){
+                    //CASE : -- if current index is Title text type and if the next row after title is an image
+                    if(
+                        $rows[$next_index]['type']=='title' && 
+                        $rows[$next_index + 1]['type']=='img'
+                    ){
+                        //then stop the itteration here, in order to make the title & image to be populated in 1 screen
+                        $curr_char = $this->max_char+1;
+                    }else{
+                        //combine with next row data (as long it also text)    
+                        $row['content'] .= ' '.$rows[$next_index]['content'];
+                        $row['rawContent'] .= $rows[$next_index]['rawContent'];
+                        $row['chars'] = $curr_char = strlen($row['content']);
+                        $row['words'] = str_word_count(strip_tags($row['content']));
+                        $skip_next++;
+                        $curr_char = strlen($row['content']) + ($this->additional_char_per_paragraf*$skip_next);
+                        //$row['curr_char'] = $curr_char;
+                        //$row['skip_next'] = $skip_next;
+                    }
+                }else{
+                    //reset counter
+                    $curr_char = $this->max_char+1;
+                }
+            }
+        }
+
+        return [
+            'row' => $row,
+            'skip_next' => $skip_next
+        ];
+    }
+
+    private function get_fontSize($charLength=0): string
     {
         $fs_class = '';
         foreach($this->fs_opt as $index=>$range){
@@ -251,16 +298,31 @@ class maverickChunkerClass
     }
 
     /**
-     * check the element inside <p> to decide the type of it
+     * check the element nodename to decide the type of it
      */
-    private function get_type_basedOnNodes($elm)
+    private function get_type_basedOnNodes($item): string
     {
         $type = 'text';
-
-        for ($i = 0; $i < $elm->length; ++$i) {
-            //print_r($elm->item($i));
-            if($elm->item($i)->nodeName == 'img') $type = 'img';
-            if($elm->item($i)->nodeName == 'ul' || $elm->item($i)->nodeName == 'ol') $type = 'list';
+        $elm = $item->childNodes;
+        
+        if($item->nodeName=='h2'){
+            $type = 'title';
+        }elseif($item->nodeName=='ul' || $item->nodeName=='ol'){
+            $type = 'list';
+        }else{
+            //consider node name is a p (paragraf), check for child element 
+            for ($i = 0; $i < $elm->length; ++$i) {
+                //print_r($elm->item($i));
+                $nodeName = $elm->item($i)->nodeName;
+                if($nodeName == 'img') $type = 'img';
+                
+                if(
+                    ($nodeName == 'strong' || $nodeName == 'h2') && //the child node contain h2 or strong
+                    $elm->length==1 //the node only have 1 child element
+                ){
+                    $type = 'title';
+                }
+            }
         }
         
         return $type;
