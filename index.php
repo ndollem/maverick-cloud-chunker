@@ -203,7 +203,7 @@ class maverickChunkerClass
             
             switch ($row['type']) {
                 case 'embed-instagram':
-                    //combine script on next item into this item
+                    //combine dependency script on next item into this item
                     if(isset($rows[$index+1]) && $rows[$index+1]['type']=='script'){
                         $row['rawContent'] .= $rows[$index+1]['rawContent'];
                         $row['attributes'] = $rows[$index+1]['attributes'];
@@ -212,7 +212,7 @@ class maverickChunkerClass
                     }
                     break;
                 case 'embed-twitter':
-                    //combine script on next item into this item
+                    //combine dependency script on next item into this item
                     if(isset($rows[$index+1]) && $rows[$index+1]['type']=='script'){
                         $row['rawContent'] .= $rows[$index+1]['rawContent'];
                         $row['attributes'] = $rows[$index+1]['attributes'];
@@ -222,6 +222,13 @@ class maverickChunkerClass
                     break;
                 case 'embed-youtube':
                     //do nothing, just break and continue next intteration here.
+                    break;
+                case 'embed-facebook':
+                    //adjust the facebook embed param in order to make it responsive
+                    $row['rawContent'] = str_replace("width=500", "width=auto", $row['rawContent']);
+                    $row['rawContent'] = str_replace('width="500"', 'width="100%"', $row['rawContent']);
+                    $row['attributes']['src'] = str_replace("width=500", "width=auto", $row['attributes']['src']);
+                    $row['attributes']['width'] = '100%'; 
                     break;
                 case 'title': //CASE : -- if the current type is title
                     //CASE : -- next item is an image
